@@ -98,12 +98,19 @@ uniform float noisiness;
 uniform float angle;
 uniform bool  hatchBackground;
 
-// Edge-specific controls (independent from hatch)
 uniform vec3  edgeColor;
-uniform float edgeThickness;  // controls Sobel sample spread (line width)
-uniform float edgeStrength;   // 0=no edges, 1=full edges
+uniform float edgeThickness;
+uniform float edgeStrength;
 
-// 0=final, 1=color FBO, 2=normal FBO, 3=hatch only, 4=edges only
+uniform float paperScale;
+uniform float lineSpacing;
+uniform vec3  lineColor;
+uniform float lineOpacity;
+uniform vec3  marginColor;
+uniform float marginPosition;
+uniform float marginOpacity;
+uniform float paperOpacity;
+
 uniform int debugMode;
 
 out vec4 fragColor;
@@ -154,18 +161,35 @@ vec2 warpUv(in vec2 uv, in float sc, in float offset) {
 
 void main() {
   vec2 size = vec2(textureSize(colorTexture, 0));
-  vec4 paper = texture(paperTexture, vUv * size * 0.00025);
 
   // ── Debug: raw FBOs ───────────────────────────────────────────────────────
   if (debugMode == 1) { fragColor = texture(colorTexture, vUv); return; }
   if (debugMode == 2) { fragColor = texture(normalTexture, vUv); return; }
 
-  // ── Background detection ──────────────────────────────────────────────────
-  float objectAlpha = texture(colorTexture, vUv).a;
-  bool  isBackground = objectAlpha < 0.01;
+  // ── Paper grain (used in all branches below) ──────────────────────────────
+  vec3 paperGrain = texture(paperTexture, vUv * size * 0.00025 * paperScale).rgb;
 
-  if (isBackground && !hatchBackground) {
-    fragColor = paper;
+  // ── Ruled lines ───────────────────────────────────────────────────────────
+  float lineFreq  = size.y / lineSpacing;
+  float linePhase = fract(vUv.y * lineFreq);
+  float lineMask  = 1.0 - smoothstep(0.0,  0.1, linePhase);
+  lineMask       *= 1.0 - smoothstep(0.97, 1.0,   linePhase);
+  float lineMask2 = 1.0 - smoothstep(0.0,  0.009, abs(linePhase - 0.015));
+
+  // ── Margin line ───────────────────────────────────────────────────────────
+  float marginDist = abs(vUv.x - marginPosition);
+  float marginMask = 1.0 - smoothstep(0.0, 0.003, marginDist);
+
+  // ── Assemble paper layer ──────────────────────────────────────────────────
+  vec3 paperLayer = paperGrain;
+  paperLayer = mix(paperLayer, lineColor,   lineMask  * lineOpacity);
+  paperLayer = mix(paperLayer, lineColor,   lineMask2 * lineOpacity * 0.5);
+  paperLayer = mix(paperLayer, marginColor, marginMask * marginOpacity);
+
+  // ── Background: just show paper ───────────────────────────────────────────
+  float objectAlpha = texture(colorTexture, vUv).a;
+  if (objectAlpha < 0.01 && !hatchBackground) {
+    fragColor = vec4(paperLayer, 1.);
     return;
   }
 
@@ -193,31 +217,23 @@ void main() {
   if (debugMode == 3) { fragColor = vec4(vec3(r), 1.); return; }
 
   // ── Edges ─────────────────────────────────────────────────────────────────
-  // edgeThickness drives the Sobel sample spread — higher = thicker lines
   vec2  uv0  = warpUv(vUv, .1, 0.);
   float edg0 = sobel(normalTexture, uv0, size, edgeThickness).r;
   vec2  uv1  = warpUv(vUv, .2, 0.);
   float edg1 = sobel(normalTexture, uv1, size, edgeThickness).r;
 
-  // edgeStrength scales how strongly edges are detected (0 = off, 1 = full)
-  float edgeMask = clamp((edg0 + edg1) * edgeStrength, 0., 1.);
-  // edgeMask=1 means "on an edge", edgeMask=0 means "not an edge"
-
-  // Remove edge pixels from the hatch pass (edges draw over hatching)
+  float edgeMask  = clamp((edg0 + edg1) * edgeStrength, 0., 1.);
   float hatchMask = r * (1. - aastep(0.3, edgeMask));
 
-  if (debugMode == 4) {
-    fragColor = vec4(vec3(1. - edgeMask), 1.);
-    return;
-  }
+  if (debugMode == 4) { fragColor = vec4(vec3(1. - edgeMask), 1.); return; }
 
   // ── Final composite ───────────────────────────────────────────────────────
-  // 1. Start with paper
-  vec3 result = paper.rgb;
-  // 2. Blend hatch ink onto paper (darken blend)
-  result = blendDarken(result, inkColor, 1. - hatchMask);
-  // 3. Blend edge ink on top (darken blend, independently coloured)
-  result = blendDarken(result, edgeColor, edgeMask);
+  // Ink colour tinted by paper grain — gives "drawn on paper" feel
+  vec3 inkOnPaper  = mix(inkColor, inkColor * paperGrain * 1.5, paperOpacity);
+
+  vec3 result = paperLayer;
+  result = blendDarken(result, inkOnPaper, 1. - hatchMask);
+  result = blendDarken(result, edgeColor,  edgeMask);
 
   fragColor = vec4(result, 1.);
 }
@@ -237,6 +253,14 @@ export interface PostParams {
   edgeColor: Color;
   edgeThickness: number;
   edgeStrength: number;
+  paperScale: number;
+  lineSpacing: number;
+  lineColor: Color;
+  lineOpacity: number;
+  marginColor: Color;
+  marginPosition: number;
+  marginOpacity: number;
+  paperOpacity: number;
   debugMode: number;
 }
 
@@ -274,7 +298,6 @@ export class Post {
     new TextureLoader().load(
       "./noise1.png",
       (tex) => {
-        console.log('found asset!')
         tex.wrapS = tex.wrapT = RepeatWrapping;
         this.shader.uniforms.noiseTexture.value = tex;
       },
@@ -293,9 +316,17 @@ export class Post {
       noisiness:       0.005,
       inkColor:        new Color(0x1c71d8),
       hatchBackground: false,
-      edgeColor:       new Color(0x000000),  // black edges by default
-      edgeThickness:   0.5,                  // pixel-spread of Sobel kernel
-      edgeStrength:    3.0,                  // amplifier — edges tend to be faint
+      edgeColor:       new Color(0x000000),
+      edgeThickness:   0.5,
+      edgeStrength:    3.0,
+      paperScale:      1.0,
+      lineSpacing:     30.0,
+      lineColor:       new Color(0x8ab4d4),
+      lineOpacity:     0.35,
+      marginColor:     new Color(0xd4606a),
+      marginPosition:  0.12,
+      marginOpacity:   0.5,
+      paperOpacity:    0.85,
       debugMode:       0,
     };
 
@@ -316,6 +347,14 @@ export class Post {
         edgeColor:       { value: this.params.edgeColor },
         edgeThickness:   { value: this.params.edgeThickness },
         edgeStrength:    { value: this.params.edgeStrength },
+        paperScale:      { value: this.params.paperScale },
+        lineSpacing:     { value: this.params.lineSpacing },
+        lineColor:       { value: this.params.lineColor },
+        lineOpacity:     { value: this.params.lineOpacity },
+        marginColor:     { value: this.params.marginColor },
+        marginPosition:  { value: this.params.marginPosition },
+        marginOpacity:   { value: this.params.marginOpacity },
+        paperOpacity:    { value: this.params.paperOpacity },
         debugMode:       { value: this.params.debugMode },
       },
       vertexShader:   orthoVs,
@@ -399,13 +438,12 @@ export class Post {
       "4 – Edges only": 4,
     }).name("Debug view").onChange((v: number) => { u.debugMode.value = v; });
 
-    // ── Hatching ─────────────────────────────────────────────────────────────
     const hatchFolder = gui.addFolder("Hatching");
     hatchFolder.addColor(this.params, "inkColor").name("Ink colour")
       .onChange((v: Color) => { u.inkColor.value.copy(v); });
     hatchFolder.add(this.params, "hatchBackground").name("Hatch background")
       .onChange((v: boolean) => { u.hatchBackground.value = v; });
-    hatchFolder.add(this.params, "scale",     0.1, 50,        0.01).name("Scale")
+    hatchFolder.add(this.params, "scale",     0.1, 50,       0.01).name("Scale")
       .onChange((v: number) => { u.scale.value = v; });
     hatchFolder.add(this.params, "thickness", 0.05, 0.95,    0.01).name("Line thickness")
       .onChange((v: number) => { u.thickness.value = v; });
@@ -416,7 +454,6 @@ export class Post {
     hatchFolder.add(this.params, "intensity", 0,    0.005, 0.0001).name("Warp intensity")
       .onChange((v: number) => { u.intensity.value = v; });
 
-    // ── Edges ─────────────────────────────────────────────────────────────────
     const edgeFolder = gui.addFolder("Edges");
     edgeFolder.addColor(this.params, "edgeColor").name("Edge colour")
       .onChange((v: Color) => { u.edgeColor.value.copy(v); });
@@ -424,6 +461,24 @@ export class Post {
       .onChange((v: number) => { u.edgeThickness.value = v; });
     edgeFolder.add(this.params, "edgeStrength",  0,   10, 0.1).name("Edge strength")
       .onChange((v: number) => { u.edgeStrength.value = v; });
+
+    const paperFolder = gui.addFolder("Paper");
+    paperFolder.add(this.params, "paperScale",     0.1, 5,    0.1 ).name("Grain scale")
+      .onChange((v: number) => { u.paperScale.value = v; });
+    paperFolder.add(this.params, "lineSpacing",    10,  80,   1   ).name("Line spacing (px)")
+      .onChange((v: number) => { u.lineSpacing.value = v; });
+    paperFolder.addColor(this.params, "lineColor").name("Line colour")
+      .onChange((v: Color) => { u.lineColor.value.copy(v); });
+    paperFolder.add(this.params, "lineOpacity",    0,   1,    0.01).name("Line opacity")
+      .onChange((v: number) => { u.lineOpacity.value = v; });
+    paperFolder.addColor(this.params, "marginColor").name("Margin colour")
+      .onChange((v: Color) => { u.marginColor.value.copy(v); });
+    paperFolder.add(this.params, "marginPosition", 0,   0.5,  0.01).name("Margin position")
+      .onChange((v: number) => { u.marginPosition.value = v; });
+    paperFolder.add(this.params, "marginOpacity",  0,   1,    0.01).name("Margin opacity")
+      .onChange((v: number) => { u.marginOpacity.value = v; });
+    paperFolder.add(this.params, "paperOpacity",   0,   1,    0.01).name("Ink/paper mix")
+      .onChange((v: number) => { u.paperOpacity.value = v; });
   }
 
   dispose(): void {
