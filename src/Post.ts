@@ -96,6 +96,7 @@ uniform vec3  edgeColor;
 uniform float edgeThickness;
 uniform float edgeStrength;
 
+uniform bool  paperEnabled;
 uniform float paperScale;
 uniform float lineSpacing;
 uniform vec3  lineColor;
@@ -156,38 +157,42 @@ vec2 warpUv(in vec2 uv, in float sc, in float offset) {
 void main() {
   vec2 size = vec2(textureSize(colorTexture, 0));
 
-  // ── Debug: raw FBOs ───────────────────────────────────────────────────────
   if (debugMode == 1) { fragColor = texture(colorTexture, vUv); return; }
   if (debugMode == 2) { fragColor = texture(normalTexture, vUv); return; }
 
-  // ── Paper grain (used in all branches below) ──────────────────────────────
+  // ── Paper grain (always sampled; used as ink tint even when paper is off) ──
   vec3 paperGrain = texture(paperTexture, vUv * size * 0.00025 * paperScale).rgb;
 
-  // ── Ruled lines ───────────────────────────────────────────────────────────
-  float lineFreq  = size.y / lineSpacing;
-  float linePhase = fract(vUv.y * lineFreq);
-  float lineMask  = 1.0 - smoothstep(0.0,  0.1, linePhase);
-  lineMask       *= 1.0 - smoothstep(0.97, 1.0,   linePhase);
-  float lineMask2 = 1.0 - smoothstep(0.0,  0.009, abs(linePhase - 0.015));
+  // ── Paper layer ───────────────────────────────────────────────────────────
+  // When paperEnabled is false the layer is plain white — no lines, no margin,
+  // no grain tint. The ink/paper mix uniform still works as normal.
+  vec3 paperLayer = vec3(1.0);
 
-  // ── Margin line ───────────────────────────────────────────────────────────
-  float marginDist = abs(vUv.x - marginPosition);
-  float marginMask = 1.0 - smoothstep(0.0, 0.003, marginDist);
+  if (paperEnabled) {
+    paperLayer = paperGrain;
 
-  // ── Assemble paper layer ──────────────────────────────────────────────────
-  vec3 paperLayer = paperGrain;
-  paperLayer = mix(paperLayer, lineColor,   lineMask  * lineOpacity);
-  paperLayer = mix(paperLayer, lineColor,   lineMask2 * lineOpacity * 0.5);
-  paperLayer = mix(paperLayer, marginColor, marginMask * marginOpacity);
+    float lineFreq  = size.y / lineSpacing;
+    float linePhase = fract(vUv.y * lineFreq);
+    float lineMask  = 1.0 - smoothstep(0.0,  0.1,  linePhase);
+           lineMask *= 1.0 - smoothstep(0.97, 1.0,  linePhase);
+    float lineMask2 = 1.0 - smoothstep(0.0,  0.009, abs(linePhase - 0.015));
 
-  // ── Background: just show paper ───────────────────────────────────────────
+    float marginDist = abs(vUv.x - marginPosition);
+    float marginMask = 1.0 - smoothstep(0.0, 0.003, marginDist);
+
+    paperLayer = mix(paperLayer, lineColor,   lineMask  * lineOpacity);
+    paperLayer = mix(paperLayer, lineColor,   lineMask2 * lineOpacity * 0.5);
+    paperLayer = mix(paperLayer, marginColor, marginMask * marginOpacity);
+  }
+
+  // ── Background early-out ──────────────────────────────────────────────────
   float objectAlpha = texture(colorTexture, vUv).a;
   if (objectAlpha < 0.01 && !hatchBackground) {
     fragColor = vec4(paperLayer, 1.);
     return;
   }
 
-  // Hatching
+  // ── Hatching ──────────────────────────────────────────────────────────────
   const int levels = 10;
   float r = 1.;
 
@@ -222,7 +227,6 @@ void main() {
   if (debugMode == 4) { fragColor = vec4(vec3(1. - edgeMask), 1.); return; }
 
   // ── Final composite ───────────────────────────────────────────────────────
-  // Ink colour tinted by paper grain — gives "drawn on paper" feel
   vec3 inkOnPaper  = mix(inkColor, inkColor * paperGrain * 1.5, paperOpacity);
 
   vec3 result = paperLayer;
@@ -245,6 +249,7 @@ export interface PostParams {
   edgeColor: Color;
   edgeThickness: number;
   edgeStrength: number;
+  paperEnabled: boolean;
   paperScale: number;
   lineSpacing: number;
   lineColor: Color;
@@ -308,6 +313,7 @@ export class Post {
       edgeColor:       new Color(0x000000),
       edgeThickness:   0.11,
       edgeStrength:    2.5,
+      paperEnabled:    true,
       paperScale:      1.0,
       lineSpacing:     30.0,
       lineColor:       new Color(0x8ab4d4),
@@ -336,6 +342,7 @@ export class Post {
         edgeColor:       { value: this.params.edgeColor },
         edgeThickness:   { value: this.params.edgeThickness },
         edgeStrength:    { value: this.params.edgeStrength },
+        paperEnabled:    { value: this.params.paperEnabled },
         paperScale:      { value: this.params.paperScale },
         lineSpacing:     { value: this.params.lineSpacing },
         lineColor:       { value: this.params.lineColor },
@@ -409,7 +416,6 @@ export class Post {
     renderer.render(this.quadScene, this.orthoCamera);
   }
 
-  // GUI
   generateParams(gui: GUI): void {
     const u = this.shader.uniforms;
 
@@ -446,6 +452,9 @@ export class Post {
       .onChange((v: number) => { u.edgeStrength.value = v; });
 
     const paperFolder = gui.addFolder("Paper");
+    // Toggle at the top of the folder — collapses the rest visually when off
+    paperFolder.add(this.params, "paperEnabled").name("Enabled")
+      .onChange((v: boolean) => { u.paperEnabled.value = v; });
     paperFolder.add(this.params, "paperScale",     0.1, 5,    0.1 ).name("Grain scale")
       .onChange((v: number) => { u.paperScale.value = v; });
     paperFolder.add(this.params, "lineSpacing",    10,  80,   1   ).name("Line spacing (px)")
