@@ -18,21 +18,21 @@ const scene = new THREE.Scene();
 
 // Isometric camera — swap for PerspectiveCamera if you prefer
 const aspect = window.innerWidth / window.innerHeight;
-  const frustumSize = 6;
+const frustumSize = 6;
 
 const zoom   = 3; // world-units visible from centre; increase to zoom out
-  const camera =
-    new THREE.OrthographicCamera(
-      (-frustumSize * aspect) / 2,
-      (frustumSize * aspect) / 2,
-      frustumSize / 2,
-      -frustumSize / 2,
-      0.1,
-      100
-    );
+const camera =
+  new THREE.OrthographicCamera(
+    (-frustumSize * aspect) / 2,
+    (frustumSize * aspect) / 2,
+    frustumSize / 2,
+    -frustumSize / 2,
+    0.1,
+    100
+  );
 
-  camera.position.set(0, 3, 4);
-  camera.lookAt(0, 1, 0);
+camera.position.set(0, 3, 4);
+camera.lookAt(0, 1, 0);
   
 
 // -- Controls
@@ -70,7 +70,7 @@ dirLight.shadow.mapSize.set(2048, 2048);
 scene.add(dirLight);
 
 // ── Mesh ──────────────────────────────────────────────────────────────────────
-const room = await ModelLoader.load('/Room5.glb', scene)
+const room = await ModelLoader.load('/Room9.glb', scene)
 
 // ── Post ──────────────────────────────────────────────────────────────────────
 const post = new Post(renderer);
