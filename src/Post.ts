@@ -22,9 +22,7 @@ import {
 } from "three";
 import GUI from "lil-gui";
 
-// ---------------------------------------------------------------------------
 // Vertex shader
-// ---------------------------------------------------------------------------
 const orthoVs = /* glsl */ `
 precision highp float;
 in vec3 position;
@@ -36,9 +34,7 @@ void main() {
 }
 `;
 
-// ---------------------------------------------------------------------------
 // Shader chunks
-// ---------------------------------------------------------------------------
 const chunkSobel = /* glsl */ `
 vec4 sobel(sampler2D tex, vec2 uv, vec2 size, float thickness) {
   vec2 texel = thickness / size;
@@ -79,9 +75,7 @@ vec3 blendDarken(vec3 base, vec3 blend, float opacity) {
 }
 `;
 
-// ---------------------------------------------------------------------------
 // Fragment shader
-// ---------------------------------------------------------------------------
 const fragmentShader = /* glsl */ `
 precision highp float;
 
@@ -193,7 +187,7 @@ void main() {
     return;
   }
 
-  // ── Hatching ──────────────────────────────────────────────────────────────
+  // Hatching
   const int levels = 10;
   float r = 1.;
 
@@ -239,9 +233,7 @@ void main() {
 }
 `;
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 export interface PostParams {
   scale: number;
   angle: number;
@@ -264,9 +256,6 @@ export interface PostParams {
   debugMode: number;
 }
 
-// ---------------------------------------------------------------------------
-// Post
-// ---------------------------------------------------------------------------
 export class Post {
   private readonly renderer: WebGLRenderer;
   private readonly colorFBO: WebGLRenderTarget;
@@ -296,13 +285,13 @@ export class Post {
 
     const noiseTexture = this.makeFallbackNoise();
     new TextureLoader().load(
-      "./noise1.png",
+      "./noise.png",
       (tex) => {
         tex.wrapS = tex.wrapT = RepeatWrapping;
         this.shader.uniforms.noiseTexture.value = tex;
       },
       undefined,
-      () => console.warn("Post: noise1.png not found, using procedural fallback.")
+      () => console.warn("Post: noise.png not found, using procedural fallback.")
     );
 
     const paperFallback = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
@@ -317,8 +306,8 @@ export class Post {
       inkColor:        new Color(0x1c71d8),
       hatchBackground: false,
       edgeColor:       new Color(0x000000),
-      edgeThickness:   0.7,
-      edgeStrength:    10.0,
+      edgeThickness:   0.11,
+      edgeStrength:    2.5,
       paperScale:      1.0,
       lineSpacing:     30.0,
       lineColor:       new Color(0x8ab4d4),
@@ -372,7 +361,6 @@ export class Post {
     this.orthoCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   }
 
-  // ---------------------------------------------------------------------------
   private makeFallbackNoise(): Texture {
     const size = 64;
     const data = new Uint8Array(size * size * 4);
@@ -383,9 +371,6 @@ export class Post {
     return tex;
   }
 
-  // ---------------------------------------------------------------------------
-  // Public API
-  // ---------------------------------------------------------------------------
   setSize(w: number, h: number): void {
     this.colorFBO.setSize(w, h);
     this.normalFBO.setSize(w, h);
@@ -424,9 +409,7 @@ export class Post {
     renderer.render(this.quadScene, this.orthoCamera);
   }
 
-  // ---------------------------------------------------------------------------
   // GUI
-  // ---------------------------------------------------------------------------
   generateParams(gui: GUI): void {
     const u = this.shader.uniforms;
 
@@ -445,7 +428,7 @@ export class Post {
       .onChange((v: boolean) => { u.hatchBackground.value = v; });
     hatchFolder.add(this.params, "scale",     0.1, 50,       0.01).name("Scale")
       .onChange((v: number) => { u.scale.value = v; });
-    hatchFolder.add(this.params, "thickness", 0.05, 0.95,    0.01).name("Line thickness")
+    hatchFolder.add(this.params, "thickness", 0.01, 0.95,    0.01).name("Line thickness")
       .onChange((v: number) => { u.thickness.value = v; });
     hatchFolder.add(this.params, "angle",     0,    Math.PI, 0.01).name("Base angle")
       .onChange((v: number) => { u.angle.value = v; });
@@ -457,7 +440,7 @@ export class Post {
     const edgeFolder = gui.addFolder("Edges");
     edgeFolder.addColor(this.params, "edgeColor").name("Edge colour")
       .onChange((v: Color) => { u.edgeColor.value.copy(v); });
-    edgeFolder.add(this.params, "edgeThickness", 0.5, 10, 0.1).name("Edge width")
+    edgeFolder.add(this.params, "edgeThickness", 0.01, 1, 0.1).name("Edge width")
       .onChange((v: number) => { u.edgeThickness.value = v; });
     edgeFolder.add(this.params, "edgeStrength",  0,   10, 0.1).name("Edge strength")
       .onChange((v: number) => { u.edgeStrength.value = v; });

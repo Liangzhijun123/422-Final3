@@ -1,106 +1,166 @@
 import * as THREE from "three";
 import GUI from "lil-gui";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Post } from "./Post";
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ModelLoader } from "./ModelLoader";
+import { type PresetName, createPresetGeometry, PRESETS } from "./presets";
 
-// ── Renderer ──────────────────────────────────────────────────────────────────
-// alpha: true so the canvas itself is transparent if needed
+// Renderer 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x000000, 0); // transparent clear by default
-document.body.style.margin = "0";
+renderer.setClearColor(0x000000, 0);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// ── Scene / Camera ────────────────────────────────────────────────────────────
+//Scene / Camera 
 const scene = new THREE.Scene();
 
-// Isometric camera — swap for PerspectiveCamera if you prefer
 const aspect = window.innerWidth / window.innerHeight;
 const frustumSize = 6;
+const zoom = 3;
 
-const zoom   = 3; // world-units visible from centre; increase to zoom out
-const camera =
-  new THREE.OrthographicCamera(
-    (-frustumSize * aspect) / 2,
-    (frustumSize * aspect) / 2,
-    frustumSize / 2,
-    -frustumSize / 2,
-    0.1,
-    100
-  );
-
+const camera = new THREE.OrthographicCamera(
+  (-frustumSize * aspect) / 2,
+  (frustumSize * aspect) / 2,
+  frustumSize / 2,
+  -frustumSize / 2,
+  0.1,
+  100
+);
 camera.position.set(0, 3, 4);
 camera.lookAt(0, 1, 0);
-  
 
-// -- Controls
+//Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
 
-const controls = new OrbitControls(
-  camera,
-  renderer.domElement
-);
-
-
-
-// ── Lights ────────────────────────────────────────────────────────────────────
-   const pointLightMain =
-    new THREE.PointLight(
-      "0xffffff",
-      50
-    );
-
-  pointLightMain.position.set(-1, 2, 5);
-  pointLightMain.castShadow = true;
-
-  scene.add(pointLightMain);
-       
+//Lights
+const keyLight = new THREE.DirectionalLight(0xfff5e0, 3.0); // warm white
+keyLight.position.set(-3, 5, 4);
+keyLight.castShadow = true;
+keyLight.shadow.bias        = -0.0002;
+keyLight.shadow.normalBias  =  0.02;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near =  1;
+keyLight.shadow.camera.far  = 20;
+keyLight.shadow.camera.left = keyLight.shadow.camera.bottom = -5;
+keyLight.shadow.camera.right = keyLight.shadow.camera.top  =  5;
+scene.add(keyLight);
 
 
-  
-  const dirLight = new THREE.DirectionalLight(0xffffff, 4.5);
 
-dirLight.position.set(-1, 2, 5);
-dirLight.castShadow = true;
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+scene.add(ambientLight);
 
-dirLight.shadow.bias = -0.0002;
-dirLight.shadow.normalBias = 0.01 ;
-dirLight.shadow.mapSize.set(2048, 2048);
-scene.add(dirLight);
 
-// ── Mesh ──────────────────────────────────────────────────────────────────────
-const room = await ModelLoader.load('/Room9.glb', scene)
+// Ground plane to see shadows
+const groundGeo = new THREE.PlaneGeometry(5, 5);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 1,
+  metalness: 0,
+});
 
-// ── Post ──────────────────────────────────────────────────────────────────────
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1.1; 
+ground.receiveShadow = true;
+scene.add(ground);
+
+
+// Scene content 
+let currentMesh: THREE.Object3D | null = null;
+
+function clearScene() {
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh = null;
+  }
+}
+
+function loadPreset(name: PresetName) {
+  clearScene();
+  const mesh = createPresetGeometry(name);
+  scene.add(mesh);
+  currentMesh = mesh;
+}
+
+async function loadGLTF(file: File) {
+  clearScene();
+  const url = URL.createObjectURL(file);
+  try {
+    const loader = new ModelLoader();
+    const root = await loader.loadFromUrl(url, scene);
+    currentMesh = root;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+loadPreset("torusKnot");
+
+// Post processing (Loading main shader)
 const post = new Post(renderer);
 post.setSize(window.innerWidth, window.innerHeight);
 
-// Option A: real paper texture
-// const paperTexture = new THREE.TextureLoader().load("./assets/paper.png");
-// post.setPaperTexture(paperTexture);
-
-// Option B: plain white fallback (no file needed)
 const paperTexture = new THREE.DataTexture(
-  new Uint8Array([255, 255, 255, 255]), 1, 1
+  new Uint8Array([255, 255, 255, 255]),
+  1,
+  1
 );
+/** Can load a paper texture like this:
+ *  const paperTexture2 = new THREE.TextureLoader().load(
+      "./paper3.png",
+      (tex) => {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      }
+    );
+ */
 paperTexture.needsUpdate = true;
 post.setPaperTexture(paperTexture);
 
-// ── GUI ───────────────────────────────────────────────────────────────────────
-const gui = new GUI();
+// GUI 
+const gui = new GUI({ title: "Hatch Shader" });
+
+// Scene controls
+const sceneFolder = gui.addFolder("Scene");
+
+const presetState = { preset: "torusKnot" as PresetName };
+sceneFolder
+  .add(presetState, "preset", Object.keys(PRESETS))
+  .name("Geometry preset")
+  .onChange((v: PresetName) => loadPreset(v));
+
+const uploadState = { upload: () => fileInput.click() };
+sceneFolder.add(uploadState, "upload").name("Upload GLB / GLTF…");
+
+// Shader controls
 post.generateParams(gui);
 
-// ── Resize ────────────────────────────────────────────────────────────────────
+const fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.accept = ".glb,.gltf";
+fileInput.style.display = "none";
+document.body.appendChild(fileInput);
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  fileInput.value = "";
+  await loadGLTF(file);
+});
+
+
 window.addEventListener("resize", () => {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const a = w / h;
 
-  // Update orthographic camera bounds on resize
-  (camera as THREE.OrthographicCamera).left   = -a * zoom;
-  (camera as THREE.OrthographicCamera).right  =  a * zoom;
-  (camera as THREE.OrthographicCamera).top    =  zoom;
+  (camera as THREE.OrthographicCamera).left = -a * zoom;
+  (camera as THREE.OrthographicCamera).right = a * zoom;
+  (camera as THREE.OrthographicCamera).top = zoom;
   (camera as THREE.OrthographicCamera).bottom = -zoom;
   camera.updateProjectionMatrix();
 
@@ -108,7 +168,6 @@ window.addEventListener("resize", () => {
   post.setSize(w, h);
 });
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
   controls.update();

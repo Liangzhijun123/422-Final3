@@ -1,5 +1,3 @@
-// src/ModelLoader.ts
-
 import * as THREE from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -7,38 +5,32 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 export class ModelLoader {
   public root?: THREE.Object3D;
 
-  static async load(
-    url: string,
-    scene: THREE.Scene
-  ): Promise<ModelLoader> {
-    const model = new ModelLoader();
+  private static buildLoader(): GLTFLoader {
     const loader = new GLTFLoader();
-
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath(
-      "https://www.gstatic.com/draco/v1/decoders/"
-    );    
-    loader.setDRACOLoader( dracoLoader );
-
-    const gltf = await loader.loadAsync(url);
-
-    model.root = gltf.scene;
-    scene.add(gltf.scene);
-
-    console.log("Loaded model objects:");
-
-    gltf.scene.traverse((child) => {
-      console.log({
-        name: child.name,
-        type: child.type,
-        visible: child.visible,
-      });
-    });
-
-    return model;
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("https://www.gstatic.com/draco/v1/decoders/");
+    loader.setDRACOLoader(draco);
+    return loader;
   }
 
-  public getObject(name: string) {
+  async loadFromUrl(url: string, scene: THREE.Scene): Promise<THREE.Object3D> {
+    const loader = ModelLoader.buildLoader();
+    const gltf = await loader.loadAsync(url);
+    this.root = gltf.scene;
+    scene.add(gltf.scene);
+    return gltf.scene;
+  }
+
+  async loadFromFile(file: File, scene: THREE.Scene): Promise<THREE.Object3D> {
+    const url = URL.createObjectURL(file);
+    try {
+      return await this.loadFromUrl(url, scene);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  getObject(name: string): THREE.Object3D | undefined {
     return this.root?.getObjectByName(name);
   }
 }
