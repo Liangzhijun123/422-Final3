@@ -8,7 +8,6 @@ export const PRESETS = {
   torusKnot:   { label: "Torus Knot" },
   cone:        { label: "Cone" },
   cylinder:    { label: "Cylinder" },
-  icosahedron: { label: "Icosahedron" },
 } as const;
 
 export type PresetName = keyof typeof PRESETS;
@@ -51,10 +50,6 @@ export function createPresetGeometry(name: PresetName): THREE.Mesh {
     case "cylinder":
       geo = new THREE.CylinderGeometry(0.8, 0.8, 2.0, 64);
       yOffset = 1.0; 
-      break;
-    case "icosahedron":
-      geo = new THREE.IcosahedronGeometry(1.2, 1);
-      yOffset = 1.2;
       break;
     default:
       geo = new THREE.SphereGeometry(1.1, 32, 16);

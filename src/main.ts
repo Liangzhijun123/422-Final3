@@ -37,7 +37,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 //Lights
-const keyLight = new THREE.DirectionalLight(0xfff5e0, 3.0); // warm white
+const keyLight = new THREE.DirectionalLight(0xfff5e0, 3.0); 
 keyLight.position.set(-3, 5, 4);
 keyLight.castShadow = true;
 keyLight.shadow.bias        = -0.0002;
@@ -51,7 +51,7 @@ scene.add(keyLight);
 
 
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
 scene.add(ambientLight);
 
 
@@ -99,7 +99,7 @@ async function loadGLTF(file: File) {
   }
 }
 
-loadPreset("torusKnot");
+loadPreset("sphere");
 
 // Post processing (Loading main shader)
 const post = new Post(renderer);
@@ -112,7 +112,7 @@ const paperTexture = new THREE.DataTexture(
 );
 /** Can load a paper texture like this:
  *  const paperTexture2 = new THREE.TextureLoader().load(
-      "./paper3.png",
+      "./paper.png",
       (tex) => {
         tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       }
@@ -122,12 +122,12 @@ paperTexture.needsUpdate = true;
 post.setPaperTexture(paperTexture);
 
 // GUI 
-const gui = new GUI({ title: "Hatch Shader" });
+const gui = new GUI({ title: "Ballpoint Shader" });
 
 // Scene controls
 const sceneFolder = gui.addFolder("Scene");
 
-const presetState = { preset: "torusKnot" as PresetName };
+const presetState = { preset: "sphere" as PresetName };
 sceneFolder
   .add(presetState, "preset", Object.keys(PRESETS))
   .name("Geometry preset")

@@ -127,6 +127,8 @@ vec2 distortUV(in vec2 uv, in vec2 nUV, in float sc, in float offset) {
   return uv;
 }
 
+
+//Currently ten generations, can be lowered, if cost is an issue.
 vec2 warpUv(in vec2 uv, in float sc, in float offset) {
   vec2 nUV = uv;
   vec2 ruv = uv;
@@ -160,12 +162,10 @@ void main() {
   if (debugMode == 1) { fragColor = texture(colorTexture, vUv); return; }
   if (debugMode == 2) { fragColor = texture(normalTexture, vUv); return; }
 
-  // ── Paper grain (always sampled; used as ink tint even when paper is off) ──
+  //Paper grain (Only does something when a paper texture is loaded)
   vec3 paperGrain = texture(paperTexture, vUv * size * 0.00025 * paperScale).rgb;
 
-  // ── Paper layer ───────────────────────────────────────────────────────────
-  // When paperEnabled is false the layer is plain white — no lines, no margin,
-  // no grain tint. The ink/paper mix uniform still works as normal.
+  // Paper layer (Optional)
   vec3 paperLayer = vec3(1.0);
 
   if (paperEnabled) {
@@ -185,15 +185,15 @@ void main() {
     paperLayer = mix(paperLayer, marginColor, marginMask * marginOpacity);
   }
 
-  // ── Background early-out ──────────────────────────────────────────────────
+  // Background early-out (Otherwise scene ends very crowded, want to keep whitespace as much as possible)
   float objectAlpha = texture(colorTexture, vUv).a;
   if (objectAlpha < 0.01 && !hatchBackground) {
     fragColor = vec4(paperLayer, 1.);
     return;
   }
 
-  // ── Hatching ──────────────────────────────────────────────────────────────
-  const int levels = 10;
+  //Hatching
+  const int levels = 10;   //Can turn this down on mobile devices if performance is needed
   float r = 1.;
 
   for (int i = 0; i < levels; i++) {
@@ -215,7 +215,7 @@ void main() {
 
   if (debugMode == 3) { fragColor = vec4(vec3(r), 1.); return; }
 
-  // ── Edges ─────────────────────────────────────────────────────────────────
+  //  Edges
   vec2  uv0  = warpUv(vUv, .1, 0.);
   float edg0 = sobel(normalTexture, uv0, size, edgeThickness).r;
   vec2  uv1  = warpUv(vUv, .2, 0.);
@@ -226,7 +226,7 @@ void main() {
 
   if (debugMode == 4) { fragColor = vec4(vec3(1. - edgeMask), 1.); return; }
 
-  // ── Final composite ───────────────────────────────────────────────────────
+  // Final composite
   vec3 inkOnPaper  = mix(inkColor, inkColor * paperGrain * 1.5, paperOpacity);
 
   vec3 result = paperLayer;
@@ -236,8 +236,6 @@ void main() {
   fragColor = vec4(result, 1.);
 }
 `;
-
-// Types
 export interface PostParams {
   scale: number;
   angle: number;
@@ -452,7 +450,6 @@ export class Post {
       .onChange((v: number) => { u.edgeStrength.value = v; });
 
     const paperFolder = gui.addFolder("Paper");
-    // Toggle at the top of the folder — collapses the rest visually when off
     paperFolder.add(this.params, "paperEnabled").name("Enabled")
       .onChange((v: boolean) => { u.paperEnabled.value = v; });
     paperFolder.add(this.params, "paperScale",     0.1, 5,    0.1 ).name("Grain scale")
