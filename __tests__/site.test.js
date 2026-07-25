@@ -12,7 +12,6 @@ describe('Positive Tests', () => {
       'src/Post.ts',
       'src/ModelLoader.ts',
       'src/presets.ts',
-      'ci.yml',
       '.github/workflows/ci.yml',
     ];
 

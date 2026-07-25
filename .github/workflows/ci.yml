@@ -1,0 +1,45 @@
+name: 3D ballpoint evironment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 1. Clean forbidden folders
+        run: npm run clean
+
+      - name: 2. Static Analysis
+        run: npx eslint . --ext .js
+
+      - name: 3. Unit Tests
+        run: npm test
+
+      - name: 4. Build
+        run: npm run build
+
+      - name: 6. Start local server and run health check
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          rm -rf local-deploy
+          mkdir -p local-deploy
+          cp -r dist/. local-deploy/
+          python3 -m http.server 3000 --directory local-deploy > /tmp/local-server.log 2>&1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+          curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://localhost:3000/
