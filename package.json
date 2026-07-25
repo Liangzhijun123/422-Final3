@@ -4,10 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "clean": "rm -rf dist",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run clean && vite build",
     "deploy": "vite build && gh-pages -d dist",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "jest",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
