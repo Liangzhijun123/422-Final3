@@ -7,14 +7,14 @@ Repo: https://github.com/HillyDaan/HillyDaan.github.io
 I built a Three.js app that transforms 3D models into a ballpoint pen drawing style.
 The effect is created using hatch shading, Sobel edge detection, and a paper texture layer.
 
-The app supports both built-in geometry shapes and external GLB/GLTF model loading.
+The app supports both built in geometry shapes and external GLB/GLTF model loading.
 
 ## Main files
 
 - src/main.ts: application setup, camera, controls, GUI, and render loop
 - src/Post.ts: post-processing shader pipeline for hatching, edges, and paper effects
 - src/ModelLoader.ts: GLB/GLTF model loading logic
-- src/presets.ts: built-in geometry preset definitions
+- src/presets.ts: built in geometry preset definitions
 - __tests__/site.test.js: positive and negative integrity tests
 - .github/workflows/ci.yml: GitHub Actions CI workflow
 
@@ -43,6 +43,7 @@ I chose this testing approach because it is lightweight and works well in CI. It
 The GitHub Actions workflow runs on pushes and pull requests to the main branch.
 
 It installs dependencies, runs linting and tests, builds the project, and performs a local health check on port 3000 for push events.
+
 
 Workflow Steps
 1. Checkout Repository
@@ -159,4 +160,15 @@ The health check confirms that the built application can be served successfully.
 ```bash
 npm run dev
 npm run build
-npm test -- --runInBand
+npm test
+```
+
+## How to trigger build pipeline
+1. Push to master
+2. update a pull request whose target branch is master
+
+```bash
+git add .
+git commit -m "trigger ci"
+git push origin master
+```
