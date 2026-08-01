@@ -15,32 +15,38 @@ The app supports both built in geometry shapes and external GLB/GLTF model loadi
 - src/Post.ts: post-processing shader pipeline for hatching, edges, and paper effects
 - src/ModelLoader.ts: GLB/GLTF model loading logic
 - src/presets.ts: built in geometry preset definitions
-- __tests__/site.test.js: positive and negative integrity tests
+- __tests__/site.test.js: grouped tests for project files, shader, presets, loader, and CI
 - .github/workflows/ci.yml: GitHub Actions CI workflow
 
 ## How I tested it
 
-I separated my tests into two groups: positive tests and negative tests.
+The test file `__tests__/site.test.js` is organized by feature, so it is easy to read:
 
-Positive tests verify that required features are still present:
-- required project files
-- shader features such as debug modes and Sobel edge detection
-- built-in geometry presets
-- GLTF model loading functionality
-- CI deployment and health check commands
+1. Project files
+- checks required files exist
+- checks missing files are detected
 
-Negative tests verify that invalid changes are detected:
-- missing or incorrect file paths
-- unsupported debug modes
-- unexpected geometry presets
-- invalid loader references
-- incorrect localhost ports in the CI workflow
+2. Post shader
+- checks debug mode and Sobel edge logic are present
+- checks invalid debug mode logic is not present
 
-I chose this testing approach because it is lightweight and works well in CI. It does not require launching the full application, but it can still catch common mistakes before changes are merged.
+3. Geometry presets
+- checks supported preset names are present
+- checks unsupported preset names are not present
+
+4. Model loader
+- checks the model loader class and API symbols are present
+- checks unsupported loader symbols are not present
+
+5. CI workflow
+- checks local deploy and localhost health-check commands are present
+- checks wrong localhost ports are not used
+
+This approach is lightweight and works well in CI because it validates important project structure and configuration without launching the full app.
 
 ## CI.yml
 
-The GitHub Actions workflow runs on pushes and pull requests to the main branch.
+The GitHub Actions workflow runs on pushes and pull requests to the master branch.
 
 It installs dependencies, runs linting and tests, builds the project, and performs a local health check on port 3000 for push events.
 
@@ -102,11 +108,11 @@ The workflow runs the Jest test suite.
 
 The tests check:
 
-Required project files exist
-Shader features are present
-Geometry presets are available
-GLTF model loading functionality exists
-CI workflow contains required deployment commands
+Required project files and missing-file detection
+Post shader debug settings and Sobel edge-detection logic
+Geometry presets for allowed and unsupported options
+Model loader class/API symbols and unsupported loader references
+CI local deploy and localhost health-check commands
 
 The tests also verify that invalid changes are detected, such as:
 
@@ -127,7 +133,7 @@ A successful build confirms that the project can compile correctly and generate 
 
 8. Local Deployment Health Check
 
-This step only runs when changes are pushed directly to the main branch:
+This step is currently configured to run only when changes are pushed to the main branch:
 
 if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -165,7 +171,7 @@ npm test
 
 ## How to trigger build pipeline
 1. Push to master
-2. update a pull request whose target branch is master
+2. Open or update a pull request whose target branch is master
 
 ```bash
 git add .

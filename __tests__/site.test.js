@@ -4,8 +4,8 @@ function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-describe('Positive Tests', () => {
-  test('includes required app entry files', () => {
+describe('Project files', () => {
+  test('includes the required application files', () => {
     const requiredFiles = [
       'index.html',
       'src/main.ts',
@@ -20,7 +20,17 @@ describe('Positive Tests', () => {
     }
   });
 
-  test('Post shader keeps debug modes and edge detection logic', () => {
+  test('detects missing files', () => {
+    const missingFiles = ['src/DoesNotExist.ts', '.github/workflow/ci.yml'];
+
+    for (const file of missingFiles) {
+      expect(fs.existsSync(file)).toBe(false);
+    }
+  });
+});
+
+describe('Post shader', () => {
+  test('includes the expected debug and edge-detection settings', () => {
     const postSource = read('src/Post.ts');
 
     expect(postSource).toContain('debugMode');
@@ -29,7 +39,15 @@ describe('Positive Tests', () => {
     expect(postSource).toContain('const int levels = 10');
   });
 
-  test('presets include expected built-in geometry options', () => {
+  test('does not include an invalid debug mode', () => {
+    const postSource = read('src/Post.ts');
+
+    expect(postSource).not.toContain('if (debugMode == 99)');
+  });
+});
+
+describe('Geometry presets', () => {
+  test('includes the supported geometry options', () => {
     const presetSource = read('src/presets.ts');
 
     const expectedPresets = ['sphere', 'box', 'torus', 'torusKnot', 'cone', 'cylinder'];
@@ -39,7 +57,18 @@ describe('Positive Tests', () => {
     }
   });
 
-  test('model loader supports GLTF loading API', () => {
+  test('does not include unsupported geometry options', () => {
+    const presetSource = read('src/presets.ts');
+    const unexpectedPresets = ['pyramid', 'capsule', 'icosahedron'];
+
+    for (const name of unexpectedPresets) {
+      expect(presetSource).not.toContain(`${name}:`);
+    }
+  });
+});
+
+describe('Model loader', () => {
+  test('includes the model-loading class and API', () => {
     const loaderSource = read('src/ModelLoader.ts');
 
     expect(loaderSource).toContain('class ModelLoader');
@@ -47,7 +76,15 @@ describe('Positive Tests', () => {
     expect(loaderSource).toContain('GLTFLoader');
   });
 
-  test('workflow deploys locally and health-checks localhost:3000', () => {
+  test('does not reference unsupported loader symbols', () => {
+    const loaderSource = read('src/ModelLoader.ts');
+
+    expect(loaderSource).not.toContain('NonExistentLoaderXYZ');
+  });
+});
+
+describe('CI workflow', () => {
+  test('includes local deployment and localhost health-check commands', () => {
     const workflow = read('.github/workflows/ci.yml');
 
     expect(workflow).toContain('npm run clean');
@@ -56,39 +93,8 @@ describe('Positive Tests', () => {
     expect(workflow).toContain('curl --fail');
     expect(workflow).toContain('http://localhost:3000/');
   });
-});
 
-describe('Negative Tests', () => {
-  test('missing files are detected', () => {
-    const missingFiles = ['src/DoesNotExist.ts', '.github/workflow/ci.yml'];
-
-    for (const file of missingFiles) {
-      expect(fs.existsSync(file)).toBe(false);
-    }
-  });
-
-  test('Post shader does not include invalid debug mode branch', () => {
-    const postSource = read('src/Post.ts');
-
-    expect(postSource).not.toContain('if (debugMode == 99)');
-  });
-
-  test('presets do not include unexpected geometry options', () => {
-    const presetSource = read('src/presets.ts');
-    const unexpectedPresets = ['pyramid', 'capsule', 'icosahedron'];
-
-    for (const name of unexpectedPresets) {
-      expect(presetSource).not.toContain(`${name}:`);
-    }
-  });
-
-  test('model loader does not reference unsupported loader symbol', () => {
-    const loaderSource = read('src/ModelLoader.ts');
-
-    expect(loaderSource).not.toContain('NonExistentLoaderXYZ');
-  });
-
-  test('workflow does not target the wrong localhost port', () => {
+  test('does not use the wrong localhost port', () => {
     const workflow = read('.github/workflows/ci.yml');
 
     expect(workflow).not.toContain('http://localhost:8080/');
